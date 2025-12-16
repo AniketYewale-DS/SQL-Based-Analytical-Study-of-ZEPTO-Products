@@ -1,7 +1,7 @@
 # SQL-Based Analytical Study of ZEPTO Products
 
 
-<img width="1280" height="720" alt="LOGO" src="https://github.com/user-attachments/assets/a6b09ce0-1f04-4522-ba28-15f8a363bc81" />
+<img zpeto" />
 
 
 
@@ -25,333 +25,263 @@ Detect pricing anomalies and underpriced/overpriced products.
 
 Categorize products based on weight, price, or discount for better decision-making.
 
-## Dataset
-
-The data for this project is sourced from the Kaggle dataset:
-
-- **Dataset Link:** [Dataset](https://www.kaggle.com/datasets/shivamb/netflix-shows?resource=download)
-
 ## Schema
-
-```sql
-DROP TABLE IF EXISTS netflix;
-CREATE TABLE netflix
-(
-    show_id      VARCHAR(5),
-    type         VARCHAR(10),
-    title        VARCHAR(250),
-    director     VARCHAR(550),
-    casts        VARCHAR(1050),
-    country      VARCHAR(550),
-    date_added   VARCHAR(55),
-    release_year INT,
-    rating       VARCHAR(15),
-    duration     VARCHAR(15),
-    listed_in    VARCHAR(250),
-    description  VARCHAR(550)
+CREATE TABLE zepto (
+  sku_id SERIAL PRIMARY KEY,
+  category VARCHAR(120),
+  name VARCHAR(150) NOT NULL,
+  mrp NUMERIC(8,2),
+  discountPercent NUMERIC(5,2),
+  availableQuantity INTEGER,
+  discountedSellingPrice NUMERIC(8,2),
+  weightInGms INTEGER,
+  outOfStock BOOLEAN,
+  quantity INTEGER
 );
-```
 
-## Business Problems and Solutions
+--data exploration
 
-### 1.Find the total number of titles added each year.
+--count of rows
+select count(*) from zepto;
 
-```sql
-SELECT 
-    EXTRACT(YEAR FROM TO_DATE(date_added, 'Month DD, YYYY')) AS year,
-    COUNT(*) AS total_titles
-FROM netflix
-GROUP BY 1
-ORDER BY year;
-
-```
-**Objective:** To understand annual content growth on Netflix and identify trends in how content additions have increased or decreased over time.
-
-### 2.Identify the month with the highest content additions
-```sql
-SELECT 
-    TO_CHAR(TO_DATE(date_added, 'Month DD, YYYY'), 'Month') AS month,
-    COUNT(*) AS total_added
-FROM netflix
-GROUP BY month
-ORDER BY total_added DESC;
-
-```
-**Objective:**  To analyze seasonal content upload patterns and determine which months see the most activity on the platform.
-
-### 3.Top 5 directors with the most content
-```sql
-SELECT 
-    director,
-    COUNT(*) AS total_content
-FROM netflix
-WHERE director IS NOT NULL AND director <> ''
-GROUP BY director
-ORDER BY total_content DESC
-LIMIT 5;
-```
-**Objective:**  To identify the most influential and frequently featured directors, revealing patterns in Netflix’s collaboration and content acquisition strategy.
-
-### 4.Actors who appear together most often
-```sql
-WITH actor_list AS (
-    SELECT 
-        show_id,
-        UNNEST(STRING_TO_ARRAY(casts, ', ')) AS actor
-    FROM netflix
-    WHERE casts IS NOT NULL AND casts <> ''
-),
-actor_pairs AS (
-    SELECT 
-        a1.actor AS actor1,
-        a2.actor AS actor2
-    FROM actor_list a1
-    JOIN actor_list a2
-       ON a1.show_id = a2.show_id
-      AND a1.actor < a2.actor   -- avoid duplicates (A,B) and (B,A)
-)
-SELECT 
-    actor1,
-    actor2,
-    COUNT(*) AS appearances_together
-FROM actor_pairs
-GROUP BY actor1, actor2
-ORDER BY appearances_together DESC
+--sample data
+SELECT * FROM zepto
 LIMIT 10;
 
-)
-```
-**Objective:**  To discover common actor pairings and frequent collaborations, which can help understand casting trends and viewer-favorite combination
+--null values
+SELECT * FROM zepto
+WHERE name IS NULL
+OR
+category IS NULL
+OR
+mrp IS NULL
+OR
+discountPercent IS NULL
+OR
+discountedSellingPrice IS NULL
+OR
+weightInGms IS NULL
+OR
+availableQuantity IS NULL
+OR
+outOfStock IS NULL
+OR
+quantity IS NULL;
 
-### 5.List all titles containing the word "Love
-```sql
-SELECT *
-FROM netflix
-WHERE title ILIKE '%love%';
-```
-**Objective:** To filter and analyze content based on keywords, helping detect theme-based trends or the popularity of specific subjects (such as romance).
+--different product categories
+SELECT DISTINCT category
+FROM zepto
+ORDER BY category;
 
-### 6. Count the Number of Movies vs TV Shows
+--products in stock vs out of stock
+SELECT outOfStock, COUNT(sku_id)
+FROM zepto
+GROUP BY outOfStock;
 
-```sql
-SELECT 
-    type,
-    COUNT(*)
-FROM netflix
-GROUP BY 1;
-```
+--product names present multiple times
+SELECT name, COUNT(sku_id) AS "Number of SKUs"
+FROM zepto
+GROUP BY name
+HAVING count(sku_id) > 1
+ORDER BY count(sku_id) DESC;
 
-**Objective:** Determine the distribution of content types on Netflix.
+--data cleaning
 
-### 7. Find the Most Common Rating for Movies and TV Shows
+--products with price = 0
+SELECT * FROM zepto
+WHERE mrp = 0 OR discountedSellingPrice = 0;
 
-```sql
-WITH RatingCounts AS (
-    SELECT 
-        type,
-        rating,
-        COUNT(*) AS rating_count
-    FROM netflix
-    GROUP BY type, rating
-),
-RankedRatings AS (
-    SELECT 
-        type,
-        rating,
-        rating_count,
-        RANK() OVER (PARTITION BY type ORDER BY rating_count DESC) AS rank
-    FROM RatingCounts
-)
-SELECT 
-    type,
-    rating AS most_frequent_rating
-FROM RankedRatings
-WHERE rank = 1;
-```
+DELETE FROM zepto
+WHERE mrp = 0;
 
-**Objective:** Identify the most frequently occurring rating for each type of content.
+--convert paise to rupees
+UPDATE zepto
+SET mrp = mrp / 100.0,
+discountedSellingPrice = discountedSellingPrice / 100.0;
 
-### 8. List All Movies Released in a Specific Year (e.g., 2020)
+SELECT mrp, discountedSellingPrice FROM zepto;
 
-```sql
-SELECT * 
-FROM netflix
-WHERE release_year = 2020;
-```
+--data analysis
 
-**Objective:** Retrieve all movies released in a specific year.
+-- Q1. Find the top 10 best-value products based on the discount percentage.
 
-### 9. Find the Top 5 Countries with the Most Content on Netflix
+SELECT DISTINCT name, mrp, discountPercent
+FROM zepto
+ORDER BY discountPercent DESC
+LIMIT 10;
 
-```sql
-SELECT * 
-FROM
-(
-    SELECT 
-        UNNEST(STRING_TO_ARRAY(country, ',')) AS country,
-        COUNT(*) AS total_content
-    FROM netflix
-    GROUP BY 1
-) AS t1
-WHERE country IS NOT NULL
-ORDER BY total_content DESC
+--Q2.What are the Products with High MRP but Out of Stock
+
+SELECT DISTINCT name,mrp
+FROM zepto
+WHERE outOfStock = TRUE and mrp > 300
+ORDER BY mrp DESC;
+
+--Q3.Calculate Estimated Revenue for each category
+
+SELECT category,
+SUM(discountedSellingPrice * availableQuantity) AS total_revenue
+FROM zepto
+GROUP BY category
+ORDER BY total_revenue;
+
+-- Q4. Find all products where MRP is greater than ₹500 and discount is less than 10%.
+
+SELECT DISTINCT name, mrp, discountPercent
+FROM zepto
+WHERE mrp > 500 AND discountPercent < 10
+ORDER BY mrp DESC, discountPercent DESC;
+
+-- Q5. Identify the top 5 categories offering the highest average discount percentage.
+
+SELECT category,
+ROUND(AVG(discountPercent),2) AS avg_discount
+FROM zepto
+GROUP BY category
+ORDER BY avg_discount DESC
 LIMIT 5;
-```
 
-**Objective:** Identify the top 5 countries with the highest number of content items.
+-- Q6. Find the price per gram for products above 100g and sort by best value.
 
-### 10. Identify the Longest Movie
+SELECT DISTINCT name, weightInGms, discountedSellingPrice,
+ROUND(discountedSellingPrice/weightInGms,2) AS price_per_gram
+FROM zepto
+WHERE weightInGms >= 100
+ORDER BY price_per_gram;
 
-```sql
+--Q7.Group the products into categories like Low, Medium, Bulk.
+SELECT DISTINCT name, weightInGms,
+CASE WHEN weightInGms < 1000 THEN 'Low'
+	WHEN weightInGms < 5000 THEN 'Medium'
+	ELSE 'Bulk'
+	END AS weight_category
+FROM zepto;
+
+--Q8.What is the Total Inventory Weight Per Category 
+SELECT category,
+SUM(weightInGms * availableQuantity) AS total_weight
+FROM zepto
+GROUP BY category
+ORDER BY total_weight;
+
+--Q9. Which products generate the highest inventory value?
+
 SELECT 
-    *
-FROM netflix
-WHERE type = 'Movie'
-ORDER BY SPLIT_PART(duration, ' ', 1)::INT DESC;
-```
+    name,
+    category,
+    mrp * availableQuantity AS inventory_value
+FROM zepto
+ORDER BY inventory_value DESC
+LIMIT 10;
 
-**Objective:** Find the movie with the longest duration.
+--Q10. Category-wise Stock Availability Status
 
-### 11. Find Content Added in the Last 5 Years
-
-```sql
-SELECT *
-FROM netflix
-WHERE TO_DATE(date_added, 'Month DD, YYYY') >= CURRENT_DATE - INTERVAL '5 years';
-```
-
-**Objective:** Retrieve content added to Netflix in the last 5 years.
-
-### 12. Find All Movies/TV Shows by Director 'Rajiv Chilaka'
-
-```sql
-SELECT *
-FROM (
-    SELECT 
-        *,
-        UNNEST(STRING_TO_ARRAY(director, ',')) AS director_name
-    FROM netflix
-) AS t
-WHERE director_name = 'Rajiv Chilaka';
-```
-
-**Objective:** List all content directed by 'Rajiv Chilaka'.
-
-### 13. List All TV Shows with More Than 5 Seasons
-
-```sql
-SELECT *
-FROM netflix
-WHERE type = 'TV Show'
-  AND SPLIT_PART(duration, ' ', 1)::INT > 5;
-```
-
-**Objective:** Identify TV shows with more than 5 seasons.
-
-### 14. Count the Number of Content Items in Each Genre
-
-```sql
 SELECT 
-    UNNEST(STRING_TO_ARRAY(listed_in, ',')) AS genre,
-    COUNT(*) AS total_content
-FROM netflix
-GROUP BY 1;
-```
+    category,
+    COUNT(*) FILTER (WHERE outOfStock = FALSE) AS in_stock,
+    COUNT(*) FILTER (WHERE outOfStock = TRUE) AS out_of_stock
+FROM zepto
+GROUP BY category;
 
-**Objective:** Count the number of content items in each genre.
+--Q11. Identify Slow-Moving Inventory
 
-### 15.Find each year and the average numbers of content release in India on netflix. 
-return top 5 year with highest avg content release!
-
-```sql
 SELECT 
-    country,
-    release_year,
-    COUNT(show_id) AS total_release,
+    name,
+    availableQuantity,
+    quantity
+FROM zepto
+WHERE availableQuantity > 5 AND quantity < 2
+ORDER BY availableQuantity DESC;
+
+
+--Q12. Products with Discount Higher Than Category Average
+
+SELECT z.name, z.category, z.discountPercent
+FROM zepto z
+JOIN (
+    SELECT category, AVG(discountPercent) AS avg_discount
+    FROM zepto
+    GROUP BY category
+) c
+ON z.category = c.category
+WHERE z.discountPercent > c.avg_discount
+ORDER BY z.discountPercent DESC;
+
+--Q13. Rank Products by Discount Within Each Category
+
+SELECT 
+    name,
+    category,
+    discountPercent,
+    RANK() OVER (PARTITION BY category ORDER BY discountPercent DESC) AS discount_rank
+FROM zepto;
+
+--Q14. Revenue Contribution Percentage per Product
+
+SELECT 
+    name,
     ROUND(
-        COUNT(show_id)::numeric /
-        (SELECT COUNT(show_id) FROM netflix WHERE country = 'India')::numeric * 100, 2
-    ) AS avg_release
-FROM netflix
-WHERE country = 'India'
-GROUP BY country, release_year
-ORDER BY avg_release DESC
-LIMIT 5;
-```
+        (discountedSellingPrice * availableQuantity) /
+        SUM(discountedSellingPrice * availableQuantity) OVER () * 100, 2
+    ) AS revenue_percentage
+FROM zepto
+ORDER BY revenue_percentage DESC;
 
-**Objective:** Calculate and rank years by the average number of content releases by India.
+--Q15. Identify Premium Products with Low Discounts
 
-### 16. List All Movies that are Documentaries
-
-```sql
-SELECT * 
-FROM netflix
-WHERE listed_in LIKE '%Documentaries';
-```
-
-**Objective:** Retrieve all movies classified as documentaries.
-
-### 17. Find All Content Without a Director
-
-```sql
-SELECT * 
-FROM netflix
-WHERE director IS NULL;
-```
-
-**Objective:** List content that does not have a director.
-
-### 18. Find How Many Movies Actor 'Salman Khan' Appeared in the Last 10 Years
-
-```sql
-SELECT * 
-FROM netflix
-WHERE casts LIKE '%Salman Khan%'
-  AND release_year > EXTRACT(YEAR FROM CURRENT_DATE) - 10;
-```
-
-**Objective:** Count the number of movies featuring 'Salman Khan' in the last 10 years.
-
-### 19. Find the Top 10 Actors Who Have Appeared in the Highest Number of Movies Produced in India
-
-```sql
 SELECT 
-    UNNEST(STRING_TO_ARRAY(casts, ',')) AS actor,
-    COUNT(*)
-FROM netflix
-WHERE country = 'India'
-GROUP BY actor
-ORDER BY COUNT(*) DESC
-LIMIT 10;
-```
+    name,
+    mrp,
+    discountPercent
+FROM zepto
+WHERE mrp > 500 AND discountPercent < 5
+ORDER BY mrp DESC;
 
-**Objective:** Identify the top 10 actors with the most appearances in Indian-produced movies.
 
-### 20. Categorize Content Based on the Presence of 'Kill' and 'Violence' Keywords
+--Q16. Category-wise Average Price per Gram
 
+SELECT 
+    category,
+    ROUND(AVG(discountedSellingPrice / NULLIF(weightInGms,0)), 2) AS avg_price_per_gram
+FROM zepto
+GROUP BY category
+ORDER BY avg_price_per_gram;
+
+--Q17. Detect Price Anomalies (Selling Above MRP)
+
+SELECT *
+FROM zepto
+WHERE discountedSellingPrice > mrp;
+
+--Q18. Identify Products with Zero Discount
+
+SELECT name, mrp
+FROM zepto
+WHERE discountPercent = 0
+ORDER BY mrp DESC;
+
+--Q19. Category-wise Revenue Share Percentage
 ```sql
 SELECT 
     category,
-    COUNT(*) AS content_count
-FROM (
-    SELECT 
-        CASE 
-            WHEN description ILIKE '%kill%' OR description ILIKE '%violence%' THEN 'Bad'
-            ELSE 'Good'
-        END AS category
-    FROM netflix
-) AS categorized_content
-GROUP BY category;
+    ROUND(
+        SUM(discountedSellingPrice * availableQuantity) /
+        SUM(SUM(discountedSellingPrice * availableQuantity)) OVER () * 100, 2
+    ) AS revenue_share_percent
+FROM zepto
+GROUP BY category
+ORDER BY revenue_share_percent DESC;
 ```
 
-**Objective:** Categorize content as 'Bad' if it contains 'kill' or 'violence' and 'Good' otherwise. Count the number of items in each category.
+--Q20. Identify Underpriced Heavy Products
+```sql
+SELECT 
+    name,
+    weightInGms,
+    discountedSellingPrice
+FROM zepto
+WHERE weightInGms > 1000 AND discountedSellingPrice < 200
+ORDER BY weightInGms DESC;
+```
 
-## Findings and Conclusion
-
-- **Content Distribution:** The dataset contains a diverse range of movies and TV shows with varying ratings and genres.
-- **Common Ratings:** Insights into the most common ratings provide an understanding of the content's target audience.
-- **Geographical Insights:** The top countries and the average content releases by India highlight regional content distribution.
-- **Content Categorization:** Categorizing content based on specific keywords helps in understanding the nature of content available on Netflix.
-
-This analysis provides a comprehensive view of Netflix's content and can help inform content strategy and decision-making.
 
