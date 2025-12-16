@@ -1,7 +1,7 @@
 # SQL-Based Analytical Study of ZEPTO Products
 
 
-![ZEPTO Screenshot](images/zepto_screenshot.png)
+![ZEPTO Screenshot](Zepto.png)
 
 
 
