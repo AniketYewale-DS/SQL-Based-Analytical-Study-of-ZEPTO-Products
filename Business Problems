@@ -1,0 +1,22 @@
+## Analytical Business Problems Solved Using SQL
+
+Q1. Find the top 10 best-value products based on the discount percentage.
+Q2. What are the products with high MRP but out of stock?
+Q3. Calculate estimated revenue for each category.
+Q4. Find all products where MRP is greater than ■500 and discount is less than 10%.
+Q5. Identify the top 5 categories offering the highest average discount percentage.
+Q6. Find the price per gram for products above 100g and sort by best value.
+Q7. Group the products into categories like Low, Medium, Bulk.
+Q8. What is the total inventory weight per category?
+Q9. Which products generate the highest inventory value?
+Q10. Category-wise stock availability status.
+Q11. Identify slow-moving inventory.
+Q12. Products with discount higher than category average.
+Q13. Rank products by discount within each category.
+Q14. Revenue contribution percentage per product.
+Q15. Identify premium products with low discounts.
+Q16. Category-wise average price per gram.
+Q17. Detect price anomalies (selling above MRP).
+Q18. Identify products with zero discount.
+Q19. Category-wise revenue share percentage.
+Q20. Identify underpriced heavy products.
